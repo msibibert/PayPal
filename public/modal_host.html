@@ -2,6 +2,17 @@
 <html>
   <head><meta charset="utf-8"><title>Return Host</title></head>
   <body>
+    <script>
+      if (window.opener) {
+        try {
+          window.opener.postMessage('paypal-approved', '*');
+        } catch (e) {}
+        try {
+          window.close();
+        } catch (e) {}
+      }
+    </script>
+
     <div id="root" style="font-family:-apple-system,system-ui,Arial;padding:24px;">
       <h3>Return page</h3>
       <p>В реальном сайте тут бы показывали модалку с лоадером и вызывали диплинк.</p>
