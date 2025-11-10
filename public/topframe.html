@@ -9,7 +9,7 @@
       const log = m => (document.getElementById('log').textContent += m + '\n');
       document.getElementById('pay').addEventListener('click', async () => {
         log('create-order...');
-        const r = await fetch('/create-order', {
+        const r = await fetch('/create-order?mode=fix', {
           method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
         });
         const j = await r.json();

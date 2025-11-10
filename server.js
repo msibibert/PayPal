@@ -8,13 +8,21 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Глобально выключим кеш на время отладки (можно потом убрать)
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // ==== ENV ====
-const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT;   // Sandbox App client-id
-const PAYPAL_SECRET = process.env.PAYPAL_SECRET;   // Sandbox App secret
-const BASE_URL = process.env.BASE_URL;             // https://<your-app>.onrender.com
-const SCHEME = process.env.SCHEME || 'screwfixapp';
+const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT;   // Sandbox client-id
+const PAYPAL_SECRET = process.env.PAYPAL_SECRET;   // Sandbox secret
+const BASE_URL      = process.env.BASE_URL;        // https://<your-app>.onrender.com
+const SCHEME        = process.env.SCHEME || 'screwfixapp';
 const REDIRECT_PATH = process.env.REDIRECT_PATH || 'order-confirmation';
-const PAYPAL_BASE = 'https://api-m.sandbox.paypal.com';
+const PAYPAL_BASE   = 'https://api-m.sandbox.paypal.com';
 
 const APP_LINK_BASE = `${SCHEME}://${REDIRECT_PATH}`; // screwfixapp://order-confirmation
 // =============
@@ -33,10 +41,10 @@ async function getAccessToken() {
 }
 
 // Создать ордер → вернуть approvalUrl и orderId
-// Пробрасываем ?mode=bug|fix для /return
+// ?mode=bug|fix пробрасываем в return_url, чтобы можно было включать/выключать обходы
 app.post('/create-order', async (req, res) => {
   try {
-    const mode = (req.query.mode === 'bug') ? 'bug' : (req.query.mode === 'fix' ? 'fix' : '');
+    const mode = (req.query.mode === 'fix') ? 'fix' : 'bug';
     const accessToken = await getAccessToken();
 
     const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
@@ -46,8 +54,8 @@ app.post('/create-order', async (req, res) => {
         intent: 'CAPTURE',
         purchase_units: [{ amount: { currency_code: 'USD', value: '1.00' } }],
         application_context: {
-          return_url: `${BASE_URL}/return${mode ? `?mode=${mode}` : ''}`,
-          cancel_url: `${BASE_URL}/return${mode ? `?mode=${mode}` : ''}`
+          return_url: `${BASE_URL}/return?mode=${mode}`,
+          cancel_url: `${BASE_URL}/return?mode=${mode}`
         }
       })
     });
@@ -60,10 +68,10 @@ app.post('/create-order', async (req, res) => {
   }
 });
 
-// Страница возврата от PayPal
-app.get('/return', (_req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'modal_host.html'))
-);
+// /return — только отдаём страницу (в ней postMessage+close, без авто-диплинков)
+app.get('/return', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'modal_host.html'));
+});
 
 // Страницы
 app.get('/popup_modal.html', (_req, res) =>
@@ -74,7 +82,7 @@ app.get('/topframe.html', (_req, res) =>
 );
 
 app.use('/public', express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, now: Date.now() }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('listening on ' + PORT));
