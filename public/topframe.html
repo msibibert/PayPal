@@ -2,17 +2,19 @@
 <html>
   <head><meta charset="utf-8"><title>PayPal TOP-FRAME</title></head>
   <body>
-    <h3>TOP-FRAME (без попапа) → должно вернуться в апп</h3>
+    <h3>TOP-FRAME (без попапа) → должно вернуться в приложение</h3>
     <button id="pay">Pay (top-frame)</button>
     <pre id="log"></pre>
     <script>
       const log = m => (document.getElementById('log').textContent += m + '\n');
       document.getElementById('pay').addEventListener('click', async () => {
         log('create-order...');
-        const r = await fetch('/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+        const r = await fetch('/create-order', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
+        });
         const j = await r.json();
         log('approvalUrl: ' + j.approvalUrl);
-        window.top.location.href = j.approvalUrl; // навигация в том же окне (работает)
+        window.top.location.href = j.approvalUrl; // открываем в этом же окне
       });
     </script>
   </body>

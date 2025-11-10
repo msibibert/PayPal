@@ -9,11 +9,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ==== ENV ====
-const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT;   // <— вставишь в Secrets
-const PAYPAL_SECRET = process.env.PAYPAL_SECRET;   // <— вставишь в Secrets
-const BASE_URL = process.env.BASE_URL;             // <— публичный URL репла (ниже укажешь)
+const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT;   // Sandbox App client-id
+const PAYPAL_SECRET = process.env.PAYPAL_SECRET;   // Sandbox App secret
+const BASE_URL = process.env.BASE_URL;             // https://<your-app>.onrender.com
 const SCHEME = process.env.SCHEME || 'screwfixapp';
 const REDIRECT_PATH = process.env.REDIRECT_PATH || 'order-confirmation';
+
 const APP_LINK_BASE = `${SCHEME}://${REDIRECT_PATH}`;        // screwfixapp://order-confirmation
 const PAYPAL_BASE = 'https://api-m.sandbox.paypal.com';
 // =============
@@ -31,10 +32,11 @@ async function getAccessToken() {
   return (await r.json()).access_token;
 }
 
-// 1) Создаём ордер → отдаём approvalUrl и orderId
-app.post('/create-order', async (req, res) => {
+// 1) Создать ордер → вернуть approvalUrl и orderId
+app.post('/create-order', async (_req, res) => {
   try {
     const accessToken = await getAccessToken();
+
     const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -42,12 +44,12 @@ app.post('/create-order', async (req, res) => {
         intent: 'CAPTURE',
         purchase_units: [{ amount: { currency_code: 'USD', value: '1.00' } }],
         application_context: {
-          // возвращаемся на наш сервер, а уже он покажет/симулирует поведение страницы
           return_url: `${BASE_URL}/return`,
           cancel_url: `${BASE_URL}/return`
         }
       })
     });
+
     const order = await r.json();
     const approve = (order.links || []).find(l => l.rel === 'approve');
     res.json({ approvalUrl: approve?.href, orderId: order.id, order });
@@ -56,26 +58,22 @@ app.post('/create-order', async (req, res) => {
   }
 });
 
-// 2) Хендлер возврата PayPal (в реальном сайте тут бы рендерилась модалка/кнопка)
-app.get('/return', (req, res) => {
-  // PayPal присылает ?token=<orderId>
-  const token = req.query.token || '';
-  // Здесь НИЧЕГО не делаем — клиентская страница сама вызовет диплинк (как у них).
-  res.sendFile(path.join(__dirname, 'public', 'modal_host.html'));
-});
-
-// Вариант, который ломает: popup → модалка → диплинк
-app.get('/popup_modal.html', (req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'popup_modal.html'))
+// 2) Страница, куда PayPal вернётся после оплаты
+//    Она шлёт событие родителю и пытается закрыть своё окно/вкладку.
+app.get('/return', (_req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'modal_host.html'))
 );
 
-// Вариант, который работает: top-frame навигация (для сравнения)
-app.get('/topframe.html', (req, res) =>
+// Страницы для разных сценариев
+app.get('/popup_modal.html', (_req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'popup_modal.html'))
+);
+app.get('/topframe.html', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'topframe.html'))
 );
 
 app.use('/public', express.static(path.join(__dirname, 'public')));
-app.get('/health', (_, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('listening on ' + PORT));
