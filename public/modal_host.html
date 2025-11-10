@@ -4,55 +4,19 @@
   <body>
     <script>
       (function () {
-        const params = new URLSearchParams(location.search);
-        const token = params.get('token') || '';
-        const bug   = params.get('bug') === '1';
-        const deeplink = `screwfixapp://order-confirmation?id=${encodeURIComponent(token)}`;
-
+        // Логи — для доказательства
+        try { console.log('return: opener?', !!window.opener); } catch(e){}
+        // Единственное действие — сообщить родителю и закрыться
         if (window.opener) {
-          // Общий случай (десктоп/вебвью): сообщаем родителю и закрываемся
-          try { window.opener.postMessage('paypal-approved', '*'); } catch (e) {}
-          try { window.close(); } catch (e) {}
-        } else {
-          // Нет opener — это как раз iOS in-app.
-          if (bug) {
-            // BUG-MODE: Ничего не делаем! (никаких авто-дииплинков)
-            // Покажем только статический текст ниже — как «белая модалка/зависло».
-          } else {
-            // FIX-MODE: Автоматически уходим в диплинк
-            try { window.location.href = deeplink; } catch (e) {}
-          }
+          try { window.opener.postMessage('paypal-approved', '*'); } catch(e){}
+          try { window.close(); } catch(e){}
         }
       })();
     </script>
-
     <div style="font-family:-apple-system,system-ui,Arial;padding:24px;">
-      <h3>Processing…</h3>
-      <p>На реальном сайте здесь показывают «processing…». Мы отрисовываем его на странице-родителе.</p>
-      <p id="btnWrap" style="display:none;">
-        <a id="btn" href="#" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">Return to the app</a>
-      </p>
+      <h3>Processing… (return)</h3>
+      <p>Это техническая страница /return. Она не делает диплинк и не рендерит модалку.</p>
+      <p>Если вы видите эту страницу в in-app браузере — значит <code>window.opener == null</code> и родитель не получил событие.</p>
     </div>
-
-    <script>
-      // В FIX-MODE показываем пользователю кнопку на случай, если авто не сработал.
-      (function () {
-        const params = new URLSearchParams(location.search);
-        const token = params.get('token') || '';
-        const bug   = params.get('bug') === '1';
-        const deeplink = `screwfixapp://order-confirmation?id=${encodeURIComponent(token)}`;
-
-        if (!bug && !window.opener) {
-          // показываем кнопку только в fix-mode и только когда opener нет
-          const wrap = document.getElementById('btnWrap');
-          const btn  = document.getElementById('btn');
-          wrap.style.display = 'block';
-          btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            try { window.location.href = deeplink; } catch (e) {}
-          });
-        }
-      })();
-    </script>
   </body>
 </html>
