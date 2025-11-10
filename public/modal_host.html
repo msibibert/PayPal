@@ -3,16 +3,37 @@
   <head><meta charset="utf-8"><title>Return Host</title></head>
   <body>
     <script>
-      // Возвращаем сигнал в родителя и пробуем закрыть окно/вкладку
-      if (window.opener) {
-        try { window.opener.postMessage('paypal-approved', '*'); } catch (e) {}
-        try { window.close(); } catch (e) {}
-      }
+      (function () {
+        const params = new URLSearchParams(location.search);
+        const token = params.get('token') || '';
+        const deeplink = `screwfixapp://order-confirmation?id=${encodeURIComponent(token)}`;
+
+        if (window.opener) {
+          // нормальный путь: сообщаем родителю и закрываемся
+          try { window.opener.postMessage('paypal-approved', '*'); } catch (e) {}
+          try { window.close(); } catch (e) {}
+        } else {
+          // фолбэк для Safari/инап: сами уходим в диплинк
+          try { window.location.href = deeplink; } catch (e) {}
+        }
+      })();
     </script>
 
     <div style="font-family:-apple-system,system-ui,Arial;padding:24px;">
-      <h3>Return page</h3>
-      <p>На реальном сайте здесь показывают «processing…». Мы отрисовываем его на странице-родителе.</p>
+      <h3>Processing…</h3>
+      <p>If you are not returned to the app automatically, tap the button below.</p>
+      <p><a id="btn" href="#" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">Return to the app</a></p>
     </div>
+
+    <script>
+      // Кнопка на случай, если авто-диплинк не сработал
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token') || '';
+      const deeplink = `screwfixapp://order-confirmation?id=${encodeURIComponent(token)}`;
+      document.getElementById('btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        try { window.location.href = deeplink; } catch (e) {}
+      });
+    </script>
   </body>
 </html>
