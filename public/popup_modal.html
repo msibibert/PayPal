@@ -33,93 +33,116 @@
     </div>
 
     <script>
-      const logEl = document.getElementById('log');
-      const overlay = document.getElementById('overlay');
-      const returnBtn = document.getElementById('returnBtn');
-      const APP_SCHEME_BASE = 'screwfixapp://order-confirmation';
+  const logEl = document.getElementById('log');
+  const overlay = document.getElementById('overlay');
+  const returnBtn = document.getElementById('returnBtn');
+  const APP_SCHEME_BASE = 'screwfixapp://order-confirmation';
 
-      const log = (m) => (logEl.textContent += m + '\n');
+  const log = (m) => (logEl.textContent += m + '\n');
 
-      let lastOrderId = null;
+  let lastOrderId = null;
+  let awaitingReturn = false;   // <-- флаг «ждём возврата из PayPal»
 
-      // Сигнал от /return — как на реальном сайте
-      window.addEventListener('message', (ev) => {
-        if (ev.data === 'paypal-approved') {
-          log('message: paypal-approved');
-          showModal(lastOrderId);
-        }
-      }, { once: true });
+  // сигнал от /return (modal_host.html шлёт postMessage и пытается закрыть окно)
+  window.addEventListener('message', (ev) => {
+    if (ev.data === 'paypal-approved') {
+      log('message: paypal-approved');
+      awaitingReturn = false;
+      showModal(lastOrderId);
+    }
+  }, { once: true });
 
-      // Фолбэк: если окно закрылось и страница снова в фокусе
-      window.addEventListener('focus', () => {
-        if (overlay.style.display !== 'flex' && lastOrderId) {
-          log('focus after checkout → assume return');
-          showModal(lastOrderId);
-        }
-      });
+  // фолбэк: вернулись к странице (сработает только если мы действительно «ждём возврата»)
+  window.addEventListener('focus', () => {
+    if (awaitingReturn) {
+      log('focus after checkout → assume return');
+      awaitingReturn = false;
+      showModal(lastOrderId);
+    }
+  });
 
-      document.getElementById('pay').addEventListener('click', async () => {
-        log('create-order...');
-        const r = await fetch('/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        const j = await r.json();
-        lastOrderId = j.orderId;
+  document.addEventListener('visibilitychange', () => {
+    if (awaitingReturn && document.visibilityState === 'visible') {
+      log('visibilitychange: visible → assume return');
+      awaitingReturn = false;
+      showModal(lastOrderId);
+    }
+  });
 
-        log('approvalUrl: ' + j.approvalUrl + '\norderId: ' + j.orderId);
+  document.getElementById('pay').addEventListener('click', async () => {
+    log('create-order...');
+    const r = await fetch('/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const j = await r.json();
+    lastOrderId = j.orderId;
 
-        // Открываем PayPal именно как отдельное окно (не вкладку, где возможно)
-        const w = 480, h = 720;
-        const left = Math.max(0, (window.screen.width - w) / 2);
-        const top  = Math.max(0, (window.screen.height - h) / 2);
+    log('approvalUrl: ' + j.approvalUrl + '\norderId: ' + j.orderId);
 
-        const win = window.open(
-          j.approvalUrl,
-          '_blank',
-          `popup=yes,width=${w},height=${h},left=${left},top=${top},` +
-          `toolbar=0,location=0,menubar=0,status=0,scrollbars=1,resizable=1`
-        );
+    // Открываем PayPal отдельным окном
+    const w = 480, h = 720;
+    const left = Math.max(0, (window.screen.width - w) / 2);
+    const top  = Math.max(0, (window.screen.height - h) / 2);
 
-        if (!win) {
-          log('popup blocked or not allowed; fallback to same-tab');
-          window.top.location.href = j.approvalUrl; // фолбэк
-          return;
-        }
+    const win = window.open(
+      j.approvalUrl,
+      '_blank',
+      `popup=yes,width=${w},height=${h},left=${left},top=${top},` +
+      `toolbar=0,location=0,menubar=0,status=0,scrollbars=1,resizable=1`
+    );
 
-        // Поллинг закрытия (на случай если postMessage не прилетит)
-        let ticks = 0;
-        const poll = setInterval(() => {
-          ticks++;
-          let closed = false;
-          try { closed = !win || win.closed; } catch(e){}
-          if (closed || ticks > 1200) {
-            clearInterval(poll);
-            showModal(lastOrderId);
-          }
-        }, 500);
-      });
+    if (!win) {
+      log('popup blocked -> same-tab fallback');
+      window.top.location.href = j.approvalUrl;
+      return;
+    }
 
-      function showModal(orderId) {
-        if (!orderId) return;
-        log('show loader modal');
-        overlay.style.display = 'flex';
+    // с этого момента действительно ждём возврата
+    awaitingReturn = true;
 
-        // Авто-диплинк
-        setTimeout(() => {
-          const deeplink = `${APP_SCHEME_BASE}?id=${encodeURIComponent(orderId)}`;
-          log('AUTO deeplink → ' + deeplink);
-          try { window.location.href = deeplink; } catch(e){}
-        }, 1200);
-
-        // Кнопка — ручной диплинк
-        returnBtn.onclick = () => {
-          const deeplink = `${APP_SCHEME_BASE}?id=${encodeURIComponent(orderId)}`;
-          log('BUTTON deeplink → ' + deeplink);
-          try { window.location.href = deeplink; } catch(e){}
-        };
+    // запасной поллинг «окно закрыто»
+    let ticks = 0;
+    const poll = setInterval(() => {
+      ticks++;
+      let closed = false;
+      try { closed = !win || win.closed; } catch(e){}
+      if (!awaitingReturn) { clearInterval(poll); return; } // уже вернулись и показали модалку
+      if (closed) {
+        log('popup detected closed');
+        awaitingReturn = false;
+        clearInterval(poll);
+        showModal(lastOrderId);
       }
-    </script>
+      if (ticks > 1800) { // 15 минут safety
+        log('timeout waiting return');
+        awaitingReturn = false;
+        clearInterval(poll);
+        showModal(lastOrderId);
+      }
+    }, 500);
+  });
+
+  function showModal(orderId) {
+    if (!orderId) return;
+    log('show loader modal');
+    overlay.style.display = 'flex';
+
+    // авто-диплинк спустя короткую задержку
+    setTimeout(() => {
+      const deeplink = `${APP_SCHEME_BASE}?id=${encodeURIComponent(orderId)}`;
+      log('AUTO deeplink → ' + deeplink);
+      try { window.location.href = deeplink; } catch(e){}
+    }, 1200);
+
+    // ручной диплинк кнопкой
+    returnBtn.onclick = () => {
+      const deeplink = `${APP_SCHEME_BASE}?id=${encodeURIComponent(orderId)}`;
+      log('BUTTON deeplink → ' + deeplink);
+      try { window.location.href = deeplink; } catch(e){}
+    };
+  }
+</script>
   </body>
 </html>
