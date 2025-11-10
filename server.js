@@ -33,8 +33,9 @@ async function getAccessToken() {
 }
 
 // 1) Создать ордер → вернуть approvalUrl и orderId
-app.post('/create-order', async (_req, res) => {
+app.post('/create-order', async (req, res) => {
   try {
+    const bug = (req.query.bug === '1'); // <-- читаем ?bug=1
     const accessToken = await getAccessToken();
 
     const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
@@ -44,8 +45,8 @@ app.post('/create-order', async (_req, res) => {
         intent: 'CAPTURE',
         purchase_units: [{ amount: { currency_code: 'USD', value: '1.00' } }],
         application_context: {
-          return_url: `${BASE_URL}/return`,
-          cancel_url: `${BASE_URL}/return`
+          return_url: `${BASE_URL}/return${bug ? '?bug=1' : ''}`,  // <-- пробрасываем bug
+          cancel_url: `${BASE_URL}/return${bug ? '?bug=1' : ''}`
         }
       })
     });

@@ -37,6 +37,8 @@
   const overlay = document.getElementById('overlay');
   const returnBtn = document.getElementById('returnBtn');
   const APP_SCHEME_BASE = 'screwfixapp://order-confirmation';
+  const urlParams = new URLSearchParams(location.search);
+  const BUG = urlParams.get('bug') === '1';
 
   const log = (m) => (logEl.textContent += m + '\n');
 
@@ -55,7 +57,7 @@
 
   document.getElementById('pay').addEventListener('click', async () => {
     log('create-order...');
-    const r = await fetch('/create-order', {
+    const r = await fetch(`/create-order${BUG ? '?bug=1' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
