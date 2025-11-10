@@ -14,9 +14,9 @@ const PAYPAL_SECRET = process.env.PAYPAL_SECRET;   // Sandbox App secret
 const BASE_URL = process.env.BASE_URL;             // https://<your-app>.onrender.com
 const SCHEME = process.env.SCHEME || 'screwfixapp';
 const REDIRECT_PATH = process.env.REDIRECT_PATH || 'order-confirmation';
-
-const APP_LINK_BASE = `${SCHEME}://${REDIRECT_PATH}`;        // screwfixapp://order-confirmation
 const PAYPAL_BASE = 'https://api-m.sandbox.paypal.com';
+
+const APP_LINK_BASE = `${SCHEME}://${REDIRECT_PATH}`; // screwfixapp://order-confirmation
 // =============
 
 async function getAccessToken() {
@@ -32,10 +32,11 @@ async function getAccessToken() {
   return (await r.json()).access_token;
 }
 
-// 1) Создать ордер → вернуть approvalUrl и orderId
+// Создать ордер → вернуть approvalUrl и orderId
+// Пробрасываем ?mode=bug|fix для /return
 app.post('/create-order', async (req, res) => {
   try {
-    const bug = (req.query.bug === '1'); // <-- читаем ?bug=1
+    const mode = (req.query.mode === 'bug') ? 'bug' : (req.query.mode === 'fix' ? 'fix' : '');
     const accessToken = await getAccessToken();
 
     const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
@@ -45,8 +46,8 @@ app.post('/create-order', async (req, res) => {
         intent: 'CAPTURE',
         purchase_units: [{ amount: { currency_code: 'USD', value: '1.00' } }],
         application_context: {
-          return_url: `${BASE_URL}/return${bug ? '?bug=1' : ''}`,  // <-- пробрасываем bug
-          cancel_url: `${BASE_URL}/return${bug ? '?bug=1' : ''}`
+          return_url: `${BASE_URL}/return${mode ? `?mode=${mode}` : ''}`,
+          cancel_url: `${BASE_URL}/return${mode ? `?mode=${mode}` : ''}`
         }
       })
     });
@@ -59,13 +60,12 @@ app.post('/create-order', async (req, res) => {
   }
 });
 
-// 2) Страница, куда PayPal вернётся после оплаты
-//    Она шлёт событие родителю и пытается закрыть своё окно/вкладку.
+// Страница возврата от PayPal
 app.get('/return', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'modal_host.html'))
 );
 
-// Страницы для разных сценариев
+// Страницы
 app.get('/popup_modal.html', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'popup_modal.html'))
 );
