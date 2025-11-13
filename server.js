@@ -345,7 +345,7 @@ app.get('/inline-fix-302', (req, res) => {
 </html>`);
 });
 
-// HTTPS-bounce: /dl?id=... -> 302 -> screwfixapp://order-confirmation?id=...
+// HTTPS-bounce: /dl?id=... -> 302 -> screwfixapp://order-confirmation?id=..
 app.get('/dl', (req, res) => {
   const id    = req.query.id || '';
   const scheme = SCHEME;
